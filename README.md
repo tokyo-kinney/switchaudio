@@ -1,11 +1,11 @@
 # Switch Audio
 Switch speakers and microphones with **pactl** only, in a less hackish way.
 
-#### This python 3.10 script allows you to find and set up default speakers and microphones sets and switch between sets.
-#### Setup alias or key shortcuts to run the script with a given **set**
-#### Speakers and Microphones are found by name and connection type.
-#### All applications actively using audio will be switched as well.
-#### Creates a INI config file in same directory of script.
+- This python 3.10 script allows you to find and set up default speakers and microphones sets and switch between sets.
+- Setup alias or key shortcuts to run the script with a given **set**
+- Speakers and Microphones are found by name and connection type.
+- All applications actively using audio will be switched as well.
+- Creates a INI config file in same directory of script.
 
 ## Usage
 ### First set the Speaker and Microphone via the GUI. These become a set with the name you give.
