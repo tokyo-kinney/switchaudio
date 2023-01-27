@@ -4,36 +4,18 @@ import subprocess
 import argparse
 import re
 from pprint import pp
+from configparser import ConfigParser
+import os.path
+
+# Configuration sets are saved in this file
+config_file = 'switch-audio.ini'
+config = ConfigParser()
 
 # Variables
-# Define the device hints for headset and built-in
-# ToDo: also define volumes
-devices = {
-    'builtin': {
-        'speaker': {
-            'name': 'Comet Lake PCH cAVS Speaker + Headphones',
-            'type': 'HDA Analog (*)'
-            },
-        'microphone': {
-            'name': 'Comet Lake PCH cAVS Digital Microphone',
-            'type': 'DMIC (*)'
-            }
-    },
-    'headset': {
-        'speaker': {
-            'name': 'Plantronics Blackwire 5220 Series Analog Stereo',
-            'type': 'USB Audio'
-            },
-        'microphone': {
-            'name': 'Plantronics Blackwire 5220 Series Mono',
-            'type': 'USB Audio'
-            }
-        }
-    }
-
 all_speakers = {}
 all_microphones = {}
-all_applications = {}
+all_apps_output = {}
+all_apps_input = {}
 default_speaker = 'unknown'
 default_microphone = 'unknown'
 
@@ -58,12 +40,22 @@ def gather_microphones():
         all_microphones = all_list
     return
 
-def gather_applications():
-    global all_applications
-    allapps = subprocess.run(['pactl', 'list', 'sink-inputs'], capture_output=True, text=True)
-    all_list = gather_list(allapps.stdout, 'Sink Input #')
-    if all_list:
-        all_applications = all_list
+def gather_apps_output():
+    global all_apps_output
+    # Gather sinks(speaker)
+    allappssinks = subprocess.run(['pactl', 'list', 'sink-inputs'], capture_output=True, text=True)
+    sinks_list = gather_list(allappssinks.stdout, 'Sink Input #')
+    if sinks_list:
+        all_apps_output = sinks_list
+    return
+
+def gather_apps_input():
+    global all_apps_input
+    # Gather sources(microphones)
+    allappssources = subprocess.run(['pactl', 'list', 'source-outputs'], capture_output=True, text=True)
+    sources_list = gather_list(allappssources.stdout, 'Source Output #')
+    if sources_list:
+        all_apps_input = sources_list
     return
 
 def gather_defaults():
@@ -73,12 +65,14 @@ def gather_defaults():
     global default_microphone
     
     speaker = subprocess.run(['pactl', 'get-default-sink'], capture_output=True, text=True)
-    default_speaker = speaker.stdout
-    default_speaker = default_speaker.rstrip('\n')
+    speaker_raw = speaker.stdout
+    speaker_text = speaker_raw.rstrip('\n')
+    default_speaker = search_speakers(speaker_text)
     
     microphone = subprocess.run(['pactl', 'get-default-source'], capture_output=True, text=True)
-    default_microphone = microphone.stdout
-    default_microphone = default_microphone.rstrip('\n')
+    microphone_raw = microphone.stdout
+    microphone_text = microphone_raw.rstrip('\n')
+    default_microphone = search_microphones(microphone_text)
 
     return
 
@@ -99,7 +93,8 @@ def gather_list(resp, list_type):
             # Check for 'List Type'
             if tab_count == 0:
                 # Detect the type of list
-                if line[0:6] == list_type or line[0:8] == list_type or line[0:12] == list_type:
+                if line.startswith(list_type):
+                #if line[0:6] == list_type or line[0:8] == list_type or line[0:12] == list_type or line[0:16] == list_type:
                     mode = 'sinkid'
                     sinkid = line.split(" #")
                     sink_id = int(sinkid[1])
@@ -151,22 +146,31 @@ def list_speakers():
         
 def list_microphones():
     global all_microphones
-    #global default_microphone
     print("========== Microphones ==========")
     for s in all_microphones:
         format_output('microphone', s)
 
 def list_applications():
-    global all_applications
-    #global all_speakers
-    print("========== Applications ==========")
-    for s in all_applications:
-        format_output('application', s)
+    list_apps_speakers()
+    list_apps_microphones()
+
+def list_apps_speakers():
+    global all_apps_output
+    print("========== Applications (speakers) ==========")
+    for s in all_apps_output:
+        format_output('app_speakers', s)
+
+def list_apps_microphones():
+    global all_apps_input
+    print("========== Applications (microphones) ==========")
+    for s in all_apps_input:
+        format_output('app_microphones', s)
 
 def format_output(type_of, key):
     global all_speakers
     global all_microphones
-    global all_applications
+    global all_apps_output
+    global all_apps_input
     global default_speaker    
     global default_microphone
     
@@ -188,14 +192,28 @@ def format_output(type_of, key):
           + " (" + all_microphones[key]['alsa.long_card_name']
           + ")\tType: " + all_microphones[key]['alsa.id']
           + "\tState: " + all_microphones[key]['State'])
-    elif type_of == 'application':
-        linkedid = int(all_applications[key]['Sink'])
+    elif type_of == 'app_speakers':
+        linkedid = int(all_apps_output[key]['Sink'])
         print("ID: " + str(key)
-          + "\tApp: " + all_applications[key]['application.name']
+          + "\tApp: " + all_apps_output[key]['application.name']
           + "\tLinked to: " + str(linkedid)
           + " (" + all_speakers[ linkedid ]['Description'] + ") ")
+    elif type_of == 'app_microphones':
+        linkedid = int(all_apps_input[key]['Source'])
+        print("ID: " + str(key)
+          + "\tApp: " + all_apps_input[key]['application.name']
+          + "\tLinked to: " + str(linkedid)
+          + " (" + all_microphones[ linkedid ]['Description'] + ") ")
     else:
         print("Data type missing")
+
+def list_sets():
+    global config
+    for section in config.sections():
+        print("Set: ", section)
+        for key, value in config.items(section):
+            print('   {} = {}'.format(key, value))
+        print()
 
 def find_text(text):
     result = {'result': False,
@@ -240,6 +258,7 @@ def search_speakers(searchString):
         for k in all_speakers[sid]:
             if searchString in all_speakers[sid][k]:
                 found[sid] = all_speakers[sid]
+                continue
     return found
 
 def search_microphones(searchString):
@@ -249,35 +268,141 @@ def search_microphones(searchString):
         for k in all_microphones[sid]:
             if searchString in all_microphones[sid][k]:
                 found[sid] = all_microphones[sid]
+                continue
     return found
 
-def search_applications(searchString):
-    global all_applications
-    found = {}
-    for sid in all_applications:
-        for k in all_applications[sid]:
-            if searchString in all_applications[sid][k]:
-                found[sid] = all_applications[sid]
+def format_to_config(speaker, microphone):
+    # Take pactl output and assign to config format.
+    # The config only needs the Name and Type
+    # Device IDs change so those are useless
+    result = {}
+    result['speaker_name'] = speaker['Description']
+    result['speaker_type'] = speaker['alsa.id']
+    result['mic_name'] = microphone['Description']
+    result['mic_type'] = microphone['alsa.id']
+    return result
+
+def read_config():
+    global config
+    global config_file
+    global default_speaker
+    global default_microphone
+
+    if os.path.exists(config_file):
+        config.read(config_file)
+    else:
+        # No config file so create one from the defaults
+        s_key = list(default_speaker.keys())[0]
+        m_key = list(default_microphone.keys())[0]
+        current = format_to_config(default_speaker[s_key], default_microphone[m_key])
+        if not config.has_section("CURRENT"):
+            #config.add_section("CURRENT")
+            config["CURRENT"] = current
+            with open(config_file, 'w') as configout:
+                config.write(configout)
+        print("No sets found. Create set from current defaults")
+        list_sets()
+
+def match_name_type(desc, alsa_id, search_type):
+    found = []
+    if search_type == 'speaker':
+        speaker_match = search_speakers(desc)
+        if speaker_match:
+            for sid in speaker_match:
+                # From each match check if the alsa.id matches the request
+                if alsa_id in speaker_match[sid]['alsa.id']:
+                    found.append(sid)
+    elif search_type == 'microphone':
+        mic_match = search_microphones(desc)
+        if mic_match:
+            for mid in mic_match:
+                # From each match check if the alsa.id matches the request
+                if alsa_id in mic_match[mid]['alsa.id']:
+                    found.append(mid)
+
     return found
 
 def set_new_default_speaker(sink_id):
     speaker = subprocess.run(['pactl', 'set-default-sink', sink_id], capture_output=True, text=True)
     pp(speaker.stdout)
+
+def set_new_default_microphone(source_id):
+    speaker = subprocess.run(['pactl', 'set-default-source', source_id], capture_output=True, text=True)
+    pp(speaker.stdout)
+
+def set_apps_sinks(sink_id):
+    global all_apps_output
+    for sid in all_apps_output:
+        # sid is the application ID
+        # sink_id is the speaker SINK
+        application = subprocess.run(['pactl', 'move-sink-input', sid, sink_id], capture_output=True, text=True)
+        pp(application.stdout)
+
+def set_apps_source(source_id):
+    global all_apps_input
+    for sid in all_apps_input:
+        # sid is the application ID
+        # source_id is the microphone SOURCE
+        application = subprocess.run(['pactl', 'move-source-output', sid, source_id], capture_output=True, text=True)
+        pp(application.stdout)
+
+def use_set(section):
+    global config
+    # Section search
+    if config.has_section(section):
+        # Match Set settings and set as defaults for system
+        speaker_id = match_name_type(config.get(section, 'speaker_name'), config.get(section, 'speaker_type'), 'speaker')
+        microphone_id = match_name_type(config.get(section, 'mic_name'), config.get(section, 'mic_type'), 'microphone')
+        set_new_default_speaker(speaker_id)
+        set_new_default_microphone(microphone_id)
+        # Change any running applications to use the same speaker and microphone
+        if all_apps_output:
+            set_apps_sinks(speaker_id)
+        if all_apps_input:
+            set_apps_source(microphone_id)
+    else:
+        print("Set does not exist")
+        list_sets()
+
+def add_section(section):
+    global config
+    global config_file
+    global default_speaker
+    global default_microphone
+
+    # If a unique name for Set then save
+    if not config.has_section(section):
+        # add defaults with this section name
+        s_key = list(default_speaker.keys())[0]
+        m_key = list(default_microphone.keys())[0]
+        current = format_to_config(default_speaker[s_key], default_microphone[m_key])
+        config.add_section(section)
+        config[section] = current
+        with open(config_file, 'w') as configout:
+            config.write(configout)
+    else:
+        print("Set not saved because name not unique")
+        list_sets()
+
+    
     
 # Main script
 
 # Arguments
 parser = argparse.ArgumentParser()
 
-# Toggle to pre-defined speaker and mic device set
-parser.add_argument('--headset', action='store_true', required=False,
-                    help='Switch to predefined Headset for both speaker and microphone')
-parser.add_argument('--builtin', action='store_true', required=False,
-                    help='Switch to predefined Built-in for both speaker and microphone')
+parser.add_argument('--use', action='store', required=False,
+                    help='Use given Set as defaults')
 
-# Display
-parser.add_argument('--display', action='store', required=False,
+parser.add_argument('--sets', action='store_true', required=False,
+                    help='Show configured Sets')
+
+# Available devices
+parser.add_argument('--available', action='store_true', required=False,
                     help='Display all available Inputs and Outputs')
+
+# Save current defaults as a Set
+parser.add_argument('--save', required=False)
 
 # Check Regex of given name
 parser.add_argument('--find', action='store', required=False,
@@ -290,37 +415,30 @@ args = parser.parse_args()
 # Gather all data first
 gather_speakers()
 gather_microphones()
-gather_applications()
+gather_apps_output()
+gather_apps_input()
 gather_defaults()
+read_config()
 
-if args.display:
+if args.use:
+    use_set(args.use)
+    exit
+
+exit
+
+if args.sets:
+    list_sets()
+    exit
+
+if args.available:
     list_microphones()
     list_speakers()
     list_applications()
     exit
 
-if args.headset:
-    pp(devices['headset'])
-    exit
-
-if args.builtin:
-    pp(devices['builtin'])
-    exit
+if args.save:
+    add_section(args.save)
 
 if args.find:
     found = find_text(args.find)
     list_found_text(found)
-    
-
-
-"""
-list_microphones()
-list_speakers()
-list_applications()
-"""
-
-"""
-print("+~+~+~+~+~++~+~+~+~+~+~+~+~+~+~+~+~+~+~+~+~+")
-found = find_text('HDA Analog')
-list_found_text(found)
-"""
