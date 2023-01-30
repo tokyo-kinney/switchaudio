@@ -320,23 +320,24 @@ def match_name_type(desc, alsa_id, search_type):
                 if alsa_id in mic_match[mid]['alsa.id']:
                     found.append(mid)
 
-    return found
+    return found[0]
 
 def set_new_default_speaker(sink_id):
+    sink_id = str(sink_id)
     speaker = subprocess.run(['pactl', 'set-default-sink', sink_id], capture_output=True, text=True)
-    pp(speaker.stdout)
 
 def set_new_default_microphone(source_id):
+    source_id = str(source_id)
     speaker = subprocess.run(['pactl', 'set-default-source', source_id], capture_output=True, text=True)
-    pp(speaker.stdout)
 
 def set_apps_sinks(sink_id):
     global all_apps_output
     for sid in all_apps_output:
         # sid is the application ID
+        sid = str(sid)
         # sink_id is the speaker SINK
+        sink_id = str(sink_id)
         application = subprocess.run(['pactl', 'move-sink-input', sid, sink_id], capture_output=True, text=True)
-        pp(application.stdout)
 
 def set_apps_source(source_id):
     global all_apps_input
@@ -344,7 +345,6 @@ def set_apps_source(source_id):
         # sid is the application ID
         # source_id is the microphone SOURCE
         application = subprocess.run(['pactl', 'move-source-output', sid, source_id], capture_output=True, text=True)
-        pp(application.stdout)
 
 def use_set(section):
     global config
