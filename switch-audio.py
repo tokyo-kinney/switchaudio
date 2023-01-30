@@ -8,7 +8,7 @@ from configparser import ConfigParser
 import os.path
 
 # Configuration sets are saved in this file
-config_file = 'switch-audio.ini'
+config_file = os.path.dirname(os.path.abspath(__file__)) + 'switch-audio.ini'
 config = ConfigParser()
 
 # Variables
@@ -442,3 +442,4 @@ if args.save:
 if args.find:
     found = find_text(args.find)
     list_found_text(found)
+
