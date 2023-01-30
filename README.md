@@ -2,7 +2,7 @@
 Switch speakers and microphones with **pactl** only, in a less hackish way.
 
 - This python 3.10 script allows you to find and set up default speakers and microphones sets and switch between sets.
-- Setup alias or key shortcuts to run the script with a given **set**
+- Setup alias or key shortcuts to run the script with a given **set** ([in KDE](https://docs.kde.org/stable5/en/khelpcenter/fundamentals/shortcuts.html))
 - Speakers and Microphones are found by name and connection type.
 - All applications actively using audio will be switched as well.
 - Creates a INI config file in same directory of script.
