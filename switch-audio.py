@@ -305,6 +305,7 @@ def read_config():
 
 def match_name_type(desc, alsa_id, search_type):
     found = []
+    result = ''
     if search_type == 'speaker':
         speaker_match = search_speakers(desc)
         if speaker_match:
@@ -319,8 +320,11 @@ def match_name_type(desc, alsa_id, search_type):
                 # From each match check if the alsa.id matches the request
                 if alsa_id in mic_match[mid]['alsa.id']:
                     found.append(mid)
-
-    return found[0]
+    if found:
+        result = found[0]
+    else:
+        print(search_type + " not found: " + desc)
+    return result
 
 def set_new_default_speaker(sink_id):
     sink_id = str(sink_id)
@@ -343,7 +347,9 @@ def set_apps_source(source_id):
     global all_apps_input
     for sid in all_apps_input:
         # sid is the application ID
+        sid = str(sid)
         # source_id is the microphone SOURCE
+        source_id = str(source_id)
         application = subprocess.run(['pactl', 'move-source-output', sid, source_id], capture_output=True, text=True)
 
 def use_set(section):
