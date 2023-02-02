@@ -3,7 +3,6 @@
 import subprocess
 import argparse
 import re
-from pprint import pp
 from configparser import ConfigParser
 import os.path
 
